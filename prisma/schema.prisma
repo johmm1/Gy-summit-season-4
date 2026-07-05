@@ -1,0 +1,460 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== Authentication Models ==============
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============== User & Role Models ==============
+enum UserRole {
+  SUPER_ADMIN
+  PRESBYTERY_ADMIN
+  CHAIRPERSON
+  DEPARTMENT_HEAD
+  DELEGATE
+  VOLUNTEER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  phone         String?   @unique
+  password      String?
+  image         String?
+  bio           String?
+  role          UserRole  @default(DELEGATE)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  delegate      Delegate?
+  chairperson   Chairperson?
+  departmentHead DepartmentHead?
+  volunteer     Volunteer?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  messages      Message[]
+  announcements Announcement[]
+  memos         Memo[]
+}
+
+// ============== Church & Congregation Models ==============
+model Church {
+  id            String    @id @default(cuid())
+  name          String
+  location      String
+  county        String
+  pastor        String
+  pastorPhone   String
+  email         String?
+  phone         String?
+  registeredAt  DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  congregations Congregation[]
+  delegates     Delegate[]
+  chairpersons  Chairperson[]
+  auditLogs     AuditLog[]
+}
+
+model Congregation {
+  id        String   @id @default(cuid())
+  name      String
+  churchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  delegates Delegate[]
+
+  @@unique([name, churchId])
+}
+
+// ============== Delegate Model ==============
+model Delegate {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  churchId           String
+  congregationId     String?
+  firstName          String
+  lastName           String
+  idNumber           String    @unique
+  dob                DateTime
+  gender             String
+  phone              String?
+  emergencyContact   String
+  emergencyPhone     String
+  medicalInfo        String?
+  allergies          String?
+  dietaryNeeds       String?
+  photo              String?
+  idDocument        String?
+  registrationDate   DateTime  @default(now())
+  approvalStatus     String    @default("PENDING")
+  qrCodeGenerated    Boolean   @default(false)
+  qrCode             String?   @unique
+  checkedIn          Boolean   @default(false)
+  checkinTime        DateTime?
+  checkedOut         Boolean   @default(false)
+  checkoutTime       DateTime?
+  accommodationId    String?
+  updatedAt          DateTime  @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  church             Church    @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  congregation       Congregation? @relation(fields: [congregationId], references: [id], onDelete: SetNull)
+  accommodation      Accommodation? @relation(fields: [accommodationId], references: [id], onDelete: SetNull)
+  attendance         Attendance[]
+  checkins           Checkin[]
+  sportTeamPlayers   SportTeamPlayer[]
+  danceTeamMembers   DanceTeamMember[]
+}
+
+// ============== Department Models ==============
+model Department {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  color       String    @default("#3d4af5")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  heads       DepartmentHead[]
+  committees  Committee[]
+}
+
+model DepartmentHead {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  departmentId   String
+  appointedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+model Committee {
+  id             String    @id @default(cuid())
+  name           String
+  departmentId   String
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+// ============== Chairperson Models ==============
+model Chairperson {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  churchId      String
+  firstName     String
+  lastName      String
+  phone         String
+  registeredAt  DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  church        Church    @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  footballTeams FootballTeam[]
+  volleyballTeams VolleyballTeam[]
+  danceTeams    DanceTeam[]
+}
+
+// ============== Sports Models ==============
+model FootballTeam {
+  id            String    @id @default(cuid())
+  name          String
+  chairpersonId String
+  church        String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  chairperson   Chairperson @relation(fields: [chairpersonId], references: [id], onDelete: Cascade)
+  players       FootballPlayer[]
+}
+
+model FootballPlayer {
+  id            String    @id @default(cuid())
+  teamId        String
+  name          String
+  delegateId    String
+  jerseyNumber  Int
+  position      String
+  age           Int
+  idDocument    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  team          FootballTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player        SportTeamPlayer @relation(fields: [delegateId], references: [delegateId], onDelete: Cascade)
+
+  @@unique([teamId, delegateId])
+}
+
+model VolleyballTeam {
+  id            String    @id @default(cuid())
+  name          String
+  chairpersonId String
+  church        String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  chairperson   Chairperson @relation(fields: [chairpersonId], references: [id], onDelete: Cascade)
+  players       VolleyballPlayer[]
+}
+
+model VolleyballPlayer {
+  id            String    @id @default(cuid())
+  teamId        String
+  name          String
+  delegateId    String
+  jerseyNumber  Int
+  position      String
+  age           Int
+  idDocument    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  team          VolleyballTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player        SportTeamPlayer @relation(fields: [delegateId], references: [delegateId], onDelete: Cascade)
+
+  @@unique([teamId, delegateId])
+}
+
+model SportTeamPlayer {
+  id            String    @id @default(cuid())
+  delegateId    String    @unique
+  sport         String
+  createdAt     DateTime  @default(now())
+
+  delegate      Delegate  @relation(fields: [delegateId], references: [id], onDelete: Cascade)
+  footballPlayers FootballPlayer[]
+  volleyballPlayers VolleyballPlayer[]
+}
+
+model DanceTeam {
+  id            String    @id @default(cuid())
+  name          String
+  chairpersonId String
+  church        String
+  style         String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  chairperson   Chairperson @relation(fields: [chairpersonId], references: [id], onDelete: Cascade)
+  members       DanceTeamMember[]
+}
+
+model DanceTeamMember {
+  id            String    @id @default(cuid())
+  teamId        String
+  delegateId    String
+  role          String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  team          DanceTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  delegate      Delegate  @relation(fields: [delegateId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, delegateId])
+}
+
+// ============== Accommodation Models ==============
+model Accommodation {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  type          String
+  capacity      Int
+  totalBeds     Int
+  occupiedBeds  Int       @default(0)
+  location      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  rooms         Room[]
+  delegates     Delegate[]
+}
+
+model Room {
+  id               String    @id @default(cuid())
+  accommodationId  String
+  roomNumber       String
+  bedCount         Int
+  occupiedCount    Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  accommodation    Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, roomNumber])
+}
+
+// ============== Attendance Models ==============
+model Attendance {
+  id            String    @id @default(cuid())
+  delegateId    String
+  status        String    @default("PRESENT")
+  timestamp     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  delegate      Delegate  @relation(fields: [delegateId], references: [id], onDelete: Cascade)
+}
+
+model Checkin {
+  id            String    @id @default(cuid())
+  delegateId    String
+  checkinTime   DateTime  @default(now())
+  checkoutTime  DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  delegate      Delegate  @relation(fields: [delegateId], references: [id], onDelete: Cascade)
+}
+
+// ============== QR Code Models ==============
+model QRCode {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  delegateId    String?
+  isUsed        Boolean   @default(false)
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============== Communication Models ==============
+model Announcement {
+  id            String    @id @default(cuid())
+  title         String
+  content       String    @db.Text
+  createdById   String
+  targetAudience String  @default("EVERYONE")
+  departmentId  String?
+  churchId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  createdBy     User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model Memo {
+  id            String    @id @default(cuid())
+  title         String
+  content       String    @db.Text
+  createdById   String
+  targetAudience String  @default("EVERYONE")
+  departmentId  String?
+  sentAt        DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  createdBy     User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id            String    @id @default(cuid())
+  senderId      String
+  recipientId   String?
+  content       String    @db.Text
+  messageType   String
+  targetAudience String
+  sentAt        DateTime  @default(now())
+  readAt        DateTime?
+
+  sender        User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  userId        String
+  title         String
+  content       String
+  type          String
+  read          Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  readAt        DateTime?
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============== Report & Audit Models ==============
+model Report {
+  id            String    @id @default(cuid())
+  title         String
+  type          String
+  content       String    @db.Text
+  fileUrl       String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  userId        String
+  action        String
+  resource      String
+  resourceId    String
+  changes       String?   @db.Text
+  churchId      String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  church        Church?   @relation(fields: [churchId], references: [id], onDelete: SetNull)
+}
+
+// ============== System Settings ==============
+model SystemSetting {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  value         String    @db.Text
+  updatedAt     DateTime  @updatedAt
+}
