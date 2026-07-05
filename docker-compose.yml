@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gy-summit-db
+    environment:
+      POSTGRES_USER: summit_user
+      POSTGRES_PASSWORD: summit_password_123
+      POSTGRES_DB: gy_summit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U summit_user -d gy_summit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: gy-summit-app
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://summit_user:summit_password_123@postgres:5432/gy_summit
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: your-secret-key-generate-with-openssl-rand-base64-32
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
